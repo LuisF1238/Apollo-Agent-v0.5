@@ -18,8 +18,8 @@ class SourcingWorkflow:
     def search_by_persona(
         self,
         persona: PersonaType,
-        person_locations: Optional[List[str]] = None,
-        max_contacts: int = 100,
+        organization_names: Optional[List[str]] = None,
+        max_contacts: int = 500,
         reveal_emails: bool = False
     ) -> List[Contact]:
         """
@@ -27,7 +27,7 @@ class SourcingWorkflow:
 
         Args:
             persona: PersonaType (Consulting, Social Good, External)
-            person_locations: Optional list of locations to filter by
+            organization_names: Optional list of company names to filter by
             max_contacts: Maximum number of contacts to retrieve
             reveal_emails: Whether to reveal personal emails (uses credits)
 
@@ -40,7 +40,8 @@ class SourcingWorkflow:
         # Search Apollo
         contacts = self.apollo_client.search_contacts_to_models(
             person_titles=filters.get("person_titles"),
-            person_locations=person_locations,
+            person_seniorities=filters.get("person_seniorities"),
+            organization_names=organization_names,
             max_results=max_contacts
         )
 
@@ -52,15 +53,15 @@ class SourcingWorkflow:
 
     def search_all_personas(
         self,
-        person_locations: Optional[List[str]] = None,
-        contacts_per_persona: int = 100,
+        organization_names: Optional[List[str]] = None,
+        contacts_per_persona: int = 500,
         reveal_emails: bool = False
     ) -> Dict[PersonaType, List[Contact]]:
         """
         Search for contacts across all persona types
 
         Args:
-            person_locations: Optional list of locations to filter by
+            organization_names: Optional list of company names to filter by
             contacts_per_persona: Number of contacts per persona
             reveal_emails: Whether to reveal personal emails (uses credits)
 
@@ -73,7 +74,7 @@ class SourcingWorkflow:
             print(f"🔍 Searching for {persona.value} contacts...")
             contacts = self.search_by_persona(
                 persona=persona,
-                person_locations=person_locations,
+                organization_names=organization_names,
                 max_contacts=contacts_per_persona,
                 reveal_emails=reveal_emails
             )
@@ -86,8 +87,8 @@ class SourcingWorkflow:
         self,
         persona: PersonaType,
         output_path: str,
-        person_locations: Optional[List[str]] = None,
-        max_contacts: int = 100,
+        organization_names: Optional[List[str]] = None,
+        max_contacts: int = 500,
         file_format: str = "csv",
         max_per_file: int = 100
     ) -> List[str]:
@@ -97,7 +98,7 @@ class SourcingWorkflow:
         Args:
             persona: PersonaType to search for
             output_path: Base path for output files
-            person_locations: Optional list of locations
+            organization_names: Optional list of company names
             max_contacts: Maximum contacts to retrieve
             file_format: 'csv' or 'excel'
             max_per_file: Maximum contacts per file (default: 100)
@@ -108,7 +109,7 @@ class SourcingWorkflow:
         # Search for contacts
         contacts = self.search_by_persona(
             persona=persona,
-            person_locations=person_locations,
+            organization_names=organization_names,
             max_contacts=max_contacts
         )
 
@@ -126,8 +127,8 @@ class SourcingWorkflow:
     def search_all_and_export(
         self,
         output_dir: str,
-        person_locations: Optional[List[str]] = None,
-        contacts_per_persona: int = 100,
+        organization_names: Optional[List[str]] = None,
+        contacts_per_persona: int = 500,
         file_format: str = "csv",
         max_per_file: int = 100
     ) -> Dict[str, List[str]]:
@@ -136,7 +137,7 @@ class SourcingWorkflow:
 
         Args:
             output_dir: Directory for output files
-            person_locations: Optional list of locations
+            organization_names: Optional list of company names
             contacts_per_persona: Number of contacts per persona
             file_format: 'csv' or 'excel'
             max_per_file: Maximum contacts per file (default: 100)
@@ -146,7 +147,7 @@ class SourcingWorkflow:
         """
         # Search all personas
         all_contacts = self.search_all_personas(
-            person_locations=person_locations,
+            organization_names=organization_names,
             contacts_per_persona=contacts_per_persona
         )
 

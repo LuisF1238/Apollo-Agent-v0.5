@@ -9,32 +9,28 @@ from models.contact import Contact, PersonaType
 
 def contacts_to_dataframe(contacts: List[Contact]) -> pd.DataFrame:
     """
-    Convert list of Contact objects to pandas DataFrame
+    Convert list of Contact objects to pandas DataFrame in sourcing sheet format
 
     Args:
         contacts: List of Contact objects
 
     Returns:
-        pandas DataFrame with contact data
+        pandas DataFrame with contact data matching sample sourcing sheet format
     """
     data = []
     for contact in contacts:
+        # Split name into first and last name
+        name_parts = contact.name.split(maxsplit=1) if contact.name else ["", ""]
+        first_name = name_parts[0] if len(name_parts) > 0 else ""
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+
         row = {
-            "Name": contact.name,
-            "Email": contact.email or "",
-            "Phone": contact.phone or "",
+            "First Name": first_name,
+            "Last Name": last_name,
+            "Job Title": contact.title or "",
             "Company": contact.company or "",
-            "Title": contact.title or "",
-            "Location": contact.location or "",
-            "Persona": contact.persona.value if contact.persona else "",
-            "LinkedIn": contact.linkedin_url or "",
-            "Years of Experience": contact.years_of_experience or "",
-            "Skills": ", ".join(contact.skills) if contact.skills else "",
-            "Industry": contact.industry or "",
-            "Seniority": contact.seniority or "",
-            "Relevance Score": f"{contact.relevance_score:.2f}",
-            "Apollo ID": contact.apollo_id or "",
-            "Notes": contact.notes or ""
+            "Email": contact.email or "",
+            "Merge status": ""
         }
         data.append(row)
 

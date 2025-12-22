@@ -28,8 +28,8 @@ if "export_files" not in st.session_state:
     st.session_state.export_files = {}
 
 # Title and description
-st.title("🔍 Data Science Sourcing Agent")
-st.markdown("Search Apollo API for Data Science contacts and export to spreadsheets by persona")
+st.title("🔍 DSS Sourcing Agent")
+st.markdown("Search Apollo API for Contacts and export to spreadsheets by persona")
 
 # Sidebar for configuration
 st.sidebar.header("Search Configuration")
@@ -42,11 +42,11 @@ selected_personas = st.sidebar.multiselect(
     help="Select which personas to search for"
 )
 
-search_locations = st.sidebar.text_area(
-    "Locations (one per line)",
-    value="San Francisco Bay Area\nNew York\nBoston",
+search_companies = st.sidebar.text_area(
+    "Companies (one per line)",
+    value="Patagonia\nREI\nThe North Face",
     height=80,
-    help="Leave empty to search all locations"
+    help="Leave empty to search all companies"
 )
 
 contacts_per_persona = st.sidebar.slider(
@@ -74,7 +74,7 @@ file_format = st.sidebar.selectbox(
 )
 
 # Main content
-st.header("1. Search & Export Contacts")
+st.header("1. Search Contacts")
 
 if st.button("🚀 Search All Personas", type="primary", help="Search Apollo for all selected personas"):
     if not selected_personas:
@@ -82,8 +82,8 @@ if st.button("🚀 Search All Personas", type="primary", help="Search Apollo for
     else:
         with st.spinner("Searching Apollo API... This may take a few minutes"):
             try:
-                # Parse locations
-                locations_list = [l.strip() for l in search_locations.split("\n") if l.strip()] if search_locations.strip() else None
+                # Parse companies
+                companies_list = [c.strip() for c in search_companies.split("\n") if c.strip()] if search_companies.strip() else None
 
                 # Convert persona names back to PersonaType
                 personas_to_search = [PersonaType(p) for p in selected_personas]
@@ -96,7 +96,7 @@ if st.button("🚀 Search All Personas", type="primary", help="Search Apollo for
                     st.write(f"🔍 Searching {persona.value} contacts...")
                     contacts = workflow.search_by_persona(
                         persona=persona,
-                        person_locations=locations_list,
+                        organization_names=companies_list,
                         max_contacts=contacts_per_persona
                     )
                     all_results[persona.value] = contacts
@@ -237,4 +237,4 @@ if st.session_state.search_results:
 
 # Footer
 st.markdown("---")
-st.markdown("From the Agentic Interal Project Team")
+st.markdown("From the Fall 25 Newbies Luis, Lauren, Praneel")

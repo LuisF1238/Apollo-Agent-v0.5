@@ -37,9 +37,8 @@ class ApolloClient:
     def search_people(
         self,
         person_titles: Optional[List[str]] = None,
-        person_locations: Optional[List[str]] = None,
         person_seniorities: Optional[List[str]] = None,
-        organization_locations: Optional[List[str]] = None,
+        organization_names: Optional[List[str]] = None,
         organization_ids: Optional[List[str]] = None,
         organization_industries: Optional[List[str]] = None,
         q_keywords: Optional[str] = None,
@@ -52,9 +51,8 @@ class ApolloClient:
 
         Args:
             person_titles: List of job titles to search for
-            person_locations: List of person locations
             person_seniorities: List of seniority levels (e.g., ["senior", "vp", "cxo"])
-            organization_locations: List of company locations
+            organization_names: List of company names to filter by
             organization_ids: List of organization IDs
             organization_industries: List of industries to filter by
             q_keywords: Keywords to search for
@@ -79,12 +77,10 @@ class ApolloClient:
 
         if person_titles:
             payload["person_titles"] = person_titles
-        if person_locations:
-            payload["person_locations"] = person_locations
         if person_seniorities:
             payload["person_seniorities"] = person_seniorities
-        if organization_locations:
-            payload["organization_locations"] = organization_locations
+        if organization_names:
+            payload["q_organization_name"] = " OR ".join(organization_names)
         if organization_ids:
             payload["organization_ids"] = organization_ids
         if organization_industries:
@@ -172,7 +168,7 @@ class ApolloClient:
     def search_contacts_to_models(
         self,
         person_titles: Optional[List[str]] = None,
-        person_locations: Optional[List[str]] = None,
+        organization_names: Optional[List[str]] = None,
         person_seniorities: Optional[List[str]] = None,
         max_results: int = 25
     ) -> List[Contact]:
@@ -181,7 +177,7 @@ class ApolloClient:
 
         Args:
             person_titles: List of job titles
-            person_locations: List of locations
+            organization_names: List of company names
             person_seniorities: List of seniority levels
             max_results: Maximum number of results to return
 
@@ -190,9 +186,9 @@ class ApolloClient:
         """
         results = self.search_people(
             person_titles=person_titles,
-            person_locations=person_locations,
+            organization_names=organization_names,
             person_seniorities=person_seniorities,
-            per_page=max_results
+            per_page=min(max_results, 100)
         )
 
         contacts = []
