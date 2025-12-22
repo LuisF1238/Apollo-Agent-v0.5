@@ -55,7 +55,7 @@ contacts_per_persona = st.sidebar.slider(
     max_value=500,
     value=100,
     step=10,
-    help="Number of contacts to retrieve per persona"
+    help="Number of contacts to retrieve per persona (max 500)"
 )
 
 max_per_file = st.sidebar.slider(
@@ -76,7 +76,7 @@ file_format = st.sidebar.selectbox(
 # Main content
 st.header("1. Search Contacts")
 
-if st.button("🚀 Search All Personas", type="primary", help="Search Apollo for all selected personas"):
+if st.button("🚀 Search All Contacts", type="primary", help="Search Apollo for all selected personas"):
     if not selected_personas:
         st.error("❌ Please select at least one persona to search")
     else:
@@ -93,7 +93,7 @@ if st.button("🚀 Search All Personas", type="primary", help="Search Apollo for
                 all_results = {}
 
                 for persona in personas_to_search:
-                    st.write(f"🔍 Searching {persona.value} contacts...")
+                    st.write(f"🔍 Searching {persona.value} contacts (requesting {contacts_per_persona})...")
                     contacts = workflow.search_by_persona(
                         persona=persona,
                         organization_names=companies_list,
@@ -101,6 +101,10 @@ if st.button("🚀 Search All Personas", type="primary", help="Search Apollo for
                     )
                     all_results[persona.value] = contacts
                     st.write(f"✓ Found {len(contacts)} {persona.value} contacts")
+
+                    # Debug info
+                    if len(contacts) < contacts_per_persona:
+                        st.info(f"ℹ️ Requested {contacts_per_persona} but only {len(contacts)} available from Apollo")
 
                 st.session_state.search_results = all_results
                 st.success(f"✅ Search completed! Found {sum(len(c) for c in all_results.values())} total contacts")
@@ -139,10 +143,18 @@ if st.session_state.search_results:
     if export_button:
         with st.spinner("Exporting to spreadsheets..."):
             try:
-                # Flatten all contacts
+                # Flatten all contacts and merge in revealed emails
                 all_contacts = []
-                for contacts in st.session_state.search_results.values():
-                    all_contacts.extend(contacts)
+                for persona_name, contacts in st.session_state.search_results.items():
+                    for idx, contact in enumerate(contacts):
+                        # Check if this contact has been enriched
+                        contact_id = f"{contact.name}_{contact.apollo_id or idx}_{persona_name}"
+                        if contact_id in st.session_state.revealed_emails:
+                            # Use the enriched version
+                            all_contacts.append(st.session_state.revealed_emails[contact_id])
+                        else:
+                            # Use the original
+                            all_contacts.append(contact)
 
                 # Export by persona
                 from utils.spreadsheet_generator import export_by_persona
@@ -180,6 +192,40 @@ if st.session_state.search_results:
     for tab_idx, (persona_name, contacts) in enumerate(st.session_state.search_results.items()):
         with persona_tabs[tab_idx]:
             st.subheader(f"{persona_name} Contacts ({len(contacts)})")
+
+            # Count how many contacts need email enrichment
+            contacts_without_email = []
+            for i, c in enumerate(contacts):
+                contact_id = f"{c.name}_{c.apollo_id or i}_{persona_name}"
+                if not c.email and contact_id not in st.session_state.revealed_emails:
+                    contacts_without_email.append((i, c))
+
+            # Add Reveal All button
+            if contacts_without_email:
+                if st.button(f"🔓 Reveal All Emails ({len(contacts_without_email)} contacts)", key=f"reveal_all_{persona_name}", type="primary"):
+                    with st.spinner(f"Enriching {len(contacts_without_email)} contacts... This may take a few minutes"):
+                        progress_bar = st.progress(0)
+                        success_count = 0
+                        failed_count = 0
+
+                        for idx, (original_idx, contact) in enumerate(contacts_without_email):
+                            contact_id = f"{contact.name}_{contact.apollo_id or original_idx}_{persona_name}"
+                            try:
+                                enriched = st.session_state.workflow_instance.enrich_contact_email(contact)
+                                st.session_state.revealed_emails[contact_id] = enriched
+                                if enriched.email:
+                                    success_count += 1
+                                else:
+                                    failed_count += 1
+                            except Exception as e:
+                                st.session_state.revealed_emails[contact_id] = contact
+                                failed_count += 1
+                                print(f"Failed to enrich {contact.name}: {str(e)}")
+
+                            progress_bar.progress((idx + 1) / len(contacts_without_email))
+
+                        st.success(f"✅ Enrichment complete! Found {success_count} emails, {failed_count} not found")
+                        st.rerun()
 
             # Sort options
             sort_by = st.selectbox(f"Sort by", ["Name", "Company", "Title"], key=f"sort_{persona_name}")
@@ -230,7 +276,7 @@ if st.session_state.search_results:
                                             if enriched.email:
                                                 st.success(f"✅ Email: {enriched.email}")
                                             else:
-                                                st.warning("⚠️ No email found")
+                                                st.info("ℹ️ Email not available in Apollo database for this contact")
                                             st.rerun()
                                         except Exception as e:
                                             st.error(f"❌ Error: {str(e)}")

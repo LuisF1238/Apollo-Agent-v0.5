@@ -22,6 +22,8 @@ class ConnectionPoint(BaseModel):
 class Contact(BaseModel):
     """Contact/prospect model for Data Science sourcing"""
     name: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
     company: Optional[str] = None

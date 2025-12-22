@@ -34,6 +34,11 @@ class SourcingWorkflow:
         Returns:
             List of Contact objects with persona assigned
         """
+        print(f"\n{'='*60}")
+        print(f"WORKFLOW: search_by_persona called with max_contacts={max_contacts}")
+        print(f"WORKFLOW: persona={persona.value}, organizations={organization_names}")
+        print(f"{'='*60}\n")
+
         # Get persona-specific filters
         filters = get_persona_filters(persona)
 

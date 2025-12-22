@@ -19,10 +19,15 @@ def contacts_to_dataframe(contacts: List[Contact]) -> pd.DataFrame:
     """
     data = []
     for contact in contacts:
-        # Split name into first and last name
-        name_parts = contact.name.split(maxsplit=1) if contact.name else ["", ""]
-        first_name = name_parts[0] if len(name_parts) > 0 else ""
-        last_name = name_parts[1] if len(name_parts) > 1 else ""
+        # Use first_name and last_name if available, otherwise split the name
+        if contact.first_name or contact.last_name:
+            first_name = contact.first_name or ""
+            last_name = contact.last_name or ""
+        else:
+            # Fallback: split name into first and last name
+            name_parts = contact.name.split(maxsplit=1) if contact.name else ["", ""]
+            first_name = name_parts[0] if len(name_parts) > 0 else ""
+            last_name = name_parts[1] if len(name_parts) > 1 else ""
 
         row = {
             "First Name": first_name,
@@ -93,56 +98,55 @@ def export_to_csv(
 def export_to_excel(
     contacts: List[Contact],
     output_path: str,
-    max_per_file: int = 100,
+    max_per_sheet: int = 100,
     sheet_name: str = "Contacts"
 ) -> List[str]:
     """
-    Export contacts to Excel file(s), splitting into multiple files if needed
+    Export contacts to a single Excel file with multiple sheets if needed
 
     Args:
         contacts: List of Contact objects
         output_path: Base output file path (without extension)
-        max_per_file: Maximum contacts per file (default: 100)
-        sheet_name: Name of the Excel sheet
+        max_per_sheet: Maximum contacts per sheet (default: 100)
+        sheet_name: Base name for the Excel sheets
 
     Returns:
-        List of generated file paths
+        List containing the single generated file path
     """
     if not contacts:
         raise ValueError("No contacts to export")
 
     output_path_obj = Path(output_path)
-    base_name = output_path_obj.stem
     output_dir = output_path_obj.parent
 
     # Create output directory if it doesn't exist
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    generated_files = []
+    # Generate single filename
+    filename = f"{output_path_obj.stem}.xlsx"
+    file_path = output_dir / filename
 
-    # Split contacts into batches
-    total_batches = (len(contacts) + max_per_file - 1) // max_per_file
+    # Split contacts into batches for sheets
+    total_sheets = (len(contacts) + max_per_sheet - 1) // max_per_sheet
 
-    for batch_idx in range(total_batches):
-        start_idx = batch_idx * max_per_file
-        end_idx = min(start_idx + max_per_file, len(contacts))
-        batch_contacts = contacts[start_idx:end_idx]
+    # Create Excel writer
+    with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+        for sheet_idx in range(total_sheets):
+            start_idx = sheet_idx * max_per_sheet
+            end_idx = min(start_idx + max_per_sheet, len(contacts))
+            batch_contacts = contacts[start_idx:end_idx]
 
-        # Generate filename
-        if total_batches > 1:
-            filename = f"{base_name}_batch_{batch_idx + 1}_of_{total_batches}.xlsx"
-        else:
-            filename = f"{base_name}.xlsx"
+            # Generate sheet name
+            if total_sheets > 1:
+                current_sheet_name = f"{sheet_name}_{sheet_idx + 1}"
+            else:
+                current_sheet_name = sheet_name
 
-        file_path = output_dir / filename
+            # Convert to DataFrame and write to sheet
+            df = contacts_to_dataframe(batch_contacts)
+            df.to_excel(writer, sheet_name=current_sheet_name, index=False)
 
-        # Convert to DataFrame and save
-        df = contacts_to_dataframe(batch_contacts)
-        df.to_excel(file_path, sheet_name=sheet_name, index=False)
-
-        generated_files.append(str(file_path))
-
-    return generated_files
+    return [str(file_path)]
 
 
 def export_by_persona(
@@ -152,12 +156,14 @@ def export_by_persona(
     file_format: str = "csv"
 ) -> dict:
     """
-    Export contacts grouped by persona, each to separate file(s)
+    Export contacts grouped by persona
+    - CSV: Multiple files with max_per_file contacts each
+    - Excel: Single file with multiple sheets (max_per_file contacts per sheet)
 
     Args:
         contacts: List of Contact objects
         output_dir: Output directory path
-        max_per_file: Maximum contacts per file (default: 100)
+        max_per_file: Maximum contacts per file/sheet (default: 100)
         file_format: 'csv' or 'excel'
 
     Returns:
@@ -187,8 +193,10 @@ def export_by_persona(
         file_path = output_path / base_filename
 
         if file_format.lower() == "excel":
-            files = export_to_excel(persona_contacts, str(file_path), max_per_file)
+            # Excel: single file with multiple sheets
+            files = export_to_excel(persona_contacts, str(file_path), max_per_sheet=max_per_file)
         else:
+            # CSV: multiple files
             files = export_to_csv(persona_contacts, str(file_path), max_per_file)
 
         results[persona_name] = files

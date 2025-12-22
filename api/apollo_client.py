@@ -93,13 +93,21 @@ class ApolloClient:
             raise RuntimeError("Rate limit exceeded for Apollo API")
 
         try:
+            print(f"DEBUG: Sending request to Apollo - Page: {page}, Per page: {per_page}")
+            print(f"DEBUG: Payload: {payload}")
+
             response = self.session.post(
                 endpoint,
                 json=payload,
                 headers={"X-Api-Key": self.api_key}
             )
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+
+            print(f"DEBUG: Response pagination: {result.get('pagination', {})}")
+            print(f"DEBUG: Number of people in response: {len(result.get('people', []))}")
+
+            return result
 
         except requests.exceptions.HTTPError as e:
             raise RuntimeError(f"Apollo API HTTP error: {e.response.status_code} - {e.response.text}")
@@ -173,38 +181,82 @@ class ApolloClient:
         max_results: int = 25
     ) -> List[Contact]:
         """
-        Search for contacts and convert to Contact models
+        Search for contacts and convert to Contact models with pagination support
 
         Args:
             person_titles: List of job titles
             organization_names: List of company names
             person_seniorities: List of seniority levels
-            max_results: Maximum number of results to return
+            max_results: Maximum number of results to return (up to 500)
 
         Returns:
             List of Contact objects
         """
-        results = self.search_people(
-            person_titles=person_titles,
-            organization_names=organization_names,
-            person_seniorities=person_seniorities,
-            per_page=min(max_results, 100)
-        )
-
         contacts = []
-        for person in results.get("people", []):
-            contact = self._apollo_person_to_contact(person)
-            contacts.append(contact)
+        page = 1
+        per_page = 100  # Apollo max per page
 
-        return contacts
+        while len(contacts) < max_results:
+            # Calculate how many more we need
+            remaining = max_results - len(contacts)
+            current_per_page = min(per_page, remaining)
+
+            print(f"Fetching page {page}, requesting {current_per_page} contacts, total so far: {len(contacts)}")
+
+            results = self.search_people(
+                person_titles=person_titles,
+                organization_names=organization_names,
+                person_seniorities=person_seniorities,
+                page=page,
+                per_page=current_per_page
+            )
+
+            people = results.get("people", [])
+            print(f"Received {len(people)} contacts from page {page}")
+
+            if not people:
+                # No more results
+                print("No more results available")
+                break
+
+            for person in people:
+                contact = self._apollo_person_to_contact(person)
+                contacts.append(contact)
+
+            # Check if we've reached the end
+            pagination = results.get("pagination", {})
+            total_pages = pagination.get("total_pages")
+            total_entries = pagination.get("total_entries", 0)
+
+            print(f"Pagination info - Page {page}, Total entries: {total_entries}, Total pages: {total_pages}")
+
+            # Stop if we've reached max_results
+            if len(contacts) >= max_results:
+                print("Reached max_results limit")
+                break
+
+            # If we got fewer results than requested, there are no more pages
+            if len(people) < current_per_page:
+                print(f"Got {len(people)} results, less than requested {current_per_page} - no more pages")
+                break
+
+            # If pagination info says we're done, stop
+            if total_pages is not None and page >= total_pages:
+                print(f"Reached last page according to pagination: {page}/{total_pages}")
+                break
+
+            page += 1
+
+        print(f"Final result: Retrieved {len(contacts)} contacts")
+        return contacts[:max_results]
 
     def enrich_contact_email(self, contact: Contact) -> Contact:
         """
-        Enrich a contact with their email by calling Apollo enrichment API
+        Enrich a contact with their email by calling Apollo email reveal API
         This uses credits to reveal the email address
 
         Args:
-            contact: Contact object with at least name and company
+            contact: Contact object with apollo_id
 
         Returns:
             Updated Contact object with email filled in
@@ -212,43 +264,100 @@ class ApolloClient:
         Raises:
             RuntimeError: If enrichment fails
         """
-        # Split name into first and last
-        name_parts = contact.name.split(maxsplit=1)
-        first_name = name_parts[0] if name_parts else contact.name
-        last_name = name_parts[1] if len(name_parts) > 1 else None
+        # If we already have apollo_id, use it directly
+        if contact.apollo_id:
+            person_id = contact.apollo_id
+        else:
+            # Otherwise, match the person first to get their ID
+            if contact.first_name and contact.last_name:
+                first_name = contact.first_name
+                last_name = contact.last_name
+            else:
+                name_parts = contact.name.split(maxsplit=1)
+                first_name = name_parts[0] if name_parts else contact.name
+                last_name = name_parts[1] if len(name_parts) > 1 else None
+
+            try:
+                enriched_data = self.enrich_person(
+                    first_name=first_name,
+                    last_name=last_name,
+                    organization_name=contact.company
+                )
+                person = enriched_data.get("person", {})
+                person_id = person.get("id")
+
+                if not person_id:
+                    print(f"DEBUG: No person ID found for {contact.name}")
+                    return contact
+            except Exception as e:
+                print(f"DEBUG: Failed to match person: {str(e)}")
+                return contact
 
         try:
-            enriched_data = self.enrich_person(
-                first_name=first_name,
-                last_name=last_name,
-                organization_name=contact.company
+            # Use the people bulk match endpoint with reveal_personal_emails
+            endpoint = f"{self.BASE_URL}/people/bulk_match"
+
+            # Rate limit
+            if not self.rate_limiter.acquire(block=True, timeout=30):
+                raise RuntimeError("Rate limit exceeded for Apollo API")
+
+            # POST request to bulk match with reveal
+            payload = {
+                "reveal_personal_emails": True,
+                "details": [{"id": person_id}]
+            }
+
+            response = self.session.post(
+                endpoint,
+                json=payload,
+                headers={"X-Api-Key": self.api_key}
             )
+            response.raise_for_status()
+            result = response.json()
 
-            # Debug: print the response structure
-            print(f"DEBUG: Enriched data keys: {enriched_data.keys()}")
-            print(f"DEBUG: Full enriched data: {enriched_data}")
+            # Extract the first match
+            matches = result.get("matches", [])
+            if not matches:
+                print(f"DEBUG: No matches returned for person_id: {person_id}")
+                return contact
 
-            # Extract email from enriched data
-            person = enriched_data.get("person", {})
-            if person.get("email"):
-                contact.email = person["email"]
+            revealed_data = matches[0]
 
-                # Also update any other missing fields
-                if not contact.phone and person.get("phone_numbers"):
-                    contact.phone = person["phone_numbers"][0] if person["phone_numbers"] else None
-                if not contact.title:
-                    contact.title = person.get("title")
+            print(f"DEBUG: Revealed data keys: {revealed_data.keys()}")
+
+            # Update first name and last name if available
+            if revealed_data.get("first_name"):
+                contact.first_name = revealed_data["first_name"]
+            if revealed_data.get("last_name"):
+                contact.last_name = revealed_data["last_name"]
+
+            # Update full name
+            if contact.first_name and contact.last_name:
+                contact.name = f"{contact.first_name} {contact.last_name}"
+            elif contact.first_name:
+                contact.name = contact.first_name
+
+            # Extract email
+            email_status = revealed_data.get("email_status")
+            if revealed_data.get("email"):
+                contact.email = revealed_data["email"]
+                print(f"DEBUG: Email found: {contact.email}")
             else:
-                # Try alternate paths in the response
-                if enriched_data.get("email"):
-                    contact.email = enriched_data["email"]
-                print(f"DEBUG: No email found in person object. Person keys: {person.keys() if person else 'person is None'}")
+                print(f"DEBUG: No email available - Status: {email_status}")
+
+            # Also update any other missing fields
+            if not contact.phone and revealed_data.get("phone_numbers"):
+                contact.phone = revealed_data["phone_numbers"][0] if revealed_data["phone_numbers"] else None
+            if not contact.title and revealed_data.get("title"):
+                contact.title = revealed_data.get("title")
+
+            print(f"DEBUG: Updated contact - Name: {contact.name}, First: {contact.first_name}, Last: {contact.last_name}, Email: {contact.email or 'Not available'}")
 
             return contact
 
         except Exception as e:
-            print(f"DEBUG: Exception during enrichment: {str(e)}")
-            raise RuntimeError(f"Failed to enrich contact {contact.name}: {str(e)}")
+            print(f"DEBUG: Exception during email reveal: {str(e)}")
+            raise RuntimeError(f"Failed to reveal email for {contact.name}: {str(e)}")
 
     def _apollo_person_to_contact(self, person_data: Dict[str, Any]) -> Contact:
         """
@@ -260,8 +369,17 @@ class ApolloClient:
         Returns:
             Contact object
         """
-        # Extract person fields
-        name = person_data.get("name", "")
+        # Extract person fields - prioritize first_name/last_name over name field
+        first_name = person_data.get("first_name", "")
+        last_name = person_data.get("last_name", "")
+
+        if first_name and last_name:
+            name = f"{first_name} {last_name}"
+        elif first_name:
+            name = first_name
+        else:
+            name = person_data.get("name", "")
+
         email = person_data.get("email")
         phone = person_data.get("phone_numbers", [None])[0] if person_data.get("phone_numbers") else None
         title = person_data.get("title")
@@ -281,6 +399,8 @@ class ApolloClient:
 
         return Contact(
             name=name,
+            first_name=first_name or None,
+            last_name=last_name or None,
             email=email,
             phone=phone,
             company=company,
