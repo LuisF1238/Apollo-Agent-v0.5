@@ -10,6 +10,9 @@ from datetime import datetime
 from sourcing_workflow import SourcingWorkflow
 from models.contact import PersonaType
 import pandas as pd
+import streamlit_authenticator as stauth
+import yaml
+from yaml.loader import SafeLoader
 
 # Page config
 st.set_page_config(
@@ -17,6 +20,63 @@ st.set_page_config(
     page_icon="🔍",
     layout="wide"
 )
+
+# Load authentication config from Streamlit secrets
+try:
+    # Try to use Streamlit secrets (for deployment)
+    if st.secrets.get("credentials"):
+        config = {
+            'credentials': dict(st.secrets["credentials"]),
+            'cookie': dict(st.secrets["cookie"])
+        }
+    else:
+        raise KeyError("credentials not in secrets")
+except (FileNotFoundError, KeyError):
+    # Fallback to config.yaml or defaults (for local development)
+    try:
+        with open('config.yaml') as file:
+            config = yaml.load(file, Loader=SafeLoader)
+    except FileNotFoundError:
+        # Default credentials if neither secrets nor config file exist
+        config = {
+            'credentials': {
+                'usernames': {
+                    'DSS': {
+                        'email': 'dss.vpsourcing@gmail.com',
+                        'name': 'DSS Sourcer',
+                        'password': '$2b$12$5NaLydJ1vOvy95BrathZI.T8G9HrOXHgr.V.dxq/Ygnt95Uss3dZ.'  # hashed 'Best_DSorg100'
+                    }
+                }
+            },
+            'cookie': {
+                'expiry_days': 30,
+                'key': 'dss_sourcing_agent_key',
+                'name': 'dss_sourcing_cookie'
+            }
+        }
+
+# Create authenticator
+authenticator = stauth.Authenticate(
+    config['credentials'],
+    config['cookie']['name'],
+    config['cookie']['key'],
+    config['cookie']['expiry_days']
+)
+
+# Login form
+authenticator.login(location='main')
+
+# Check authentication
+if st.session_state.get("authentication_status") == False:
+    st.error('Username/password is incorrect')
+    st.stop()
+elif st.session_state.get("authentication_status") == None:
+    st.warning('Please enter your username and password')
+    st.stop()
+
+# Logout button in sidebar
+authenticator.logout(location='sidebar')
+st.sidebar.write(f'Welcome *{st.session_state["name"]}*')
 
 # Initialize session state
 if "search_results" not in st.session_state:
@@ -52,6 +112,12 @@ search_companies = st.sidebar.text_area(
     value=st.session_state.selected_companies,
     height=80,
     help="Leave empty to search all companies"
+)
+
+verified_only = st.sidebar.toggle(
+    "Verified Profiles Only",
+    value=False,
+    help="Only retrieve verified Apollo profiles"
 )
 
 contacts_per_persona = st.sidebar.slider(
@@ -192,7 +258,8 @@ with tab2:
                         contacts = workflow.search_by_persona(
                             persona=persona,
                             organization_names=companies_list,
-                            max_contacts=contacts_per_persona
+                            max_contacts=contacts_per_persona,
+                            verified_only=verified_only
                         )
                         all_results[persona.value] = contacts
                         st.write(f"✓ Found {len(contacts)} {persona.value} contacts")

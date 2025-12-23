@@ -44,7 +44,8 @@ class ApolloClient:
         q_keywords: Optional[str] = None,
         page: int = 1,
         per_page: int = 25,
-        reveal_personal_emails: bool = False
+        reveal_personal_emails: bool = False,
+        verified_only: bool = False
     ) -> Dict[str, Any]:
         """
         Search for people using Apollo.io People Search API
@@ -59,6 +60,7 @@ class ApolloClient:
             page: Page number (starts at 1)
             per_page: Results per page (max 100)
             reveal_personal_emails: If False, won't use credits to reveal emails (default: False)
+            verified_only: If True, only return verified Apollo profiles (default: False)
 
         Returns:
             Dictionary with search results including 'people', 'pagination', etc.
@@ -87,6 +89,8 @@ class ApolloClient:
             payload["organization_industry_tag_ids"] = organization_industries
         if q_keywords:
             payload["q_keywords"] = q_keywords
+        if verified_only:
+            payload["contact_email_status"] = ["verified"]
 
         # Rate limit
         if not self.rate_limiter.acquire(block=True, timeout=30):
@@ -178,7 +182,8 @@ class ApolloClient:
         person_titles: Optional[List[str]] = None,
         organization_names: Optional[List[str]] = None,
         person_seniorities: Optional[List[str]] = None,
-        max_results: int = 25
+        max_results: int = 25,
+        verified_only: bool = False
     ) -> List[Contact]:
         """
         Search for contacts and convert to Contact models with pagination support
@@ -188,6 +193,7 @@ class ApolloClient:
             organization_names: List of company names
             person_seniorities: List of seniority levels
             max_results: Maximum number of results to return (up to 500)
+            verified_only: If True, only return verified Apollo profiles
 
         Returns:
             List of Contact objects
@@ -208,7 +214,8 @@ class ApolloClient:
                 organization_names=organization_names,
                 person_seniorities=person_seniorities,
                 page=page,
-                per_page=current_per_page
+                per_page=current_per_page,
+                verified_only=verified_only
             )
 
             people = results.get("people", [])

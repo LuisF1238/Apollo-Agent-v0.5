@@ -20,7 +20,8 @@ class SourcingWorkflow:
         persona: PersonaType,
         organization_names: Optional[List[str]] = None,
         max_contacts: int = 500,
-        reveal_emails: bool = False
+        reveal_emails: bool = False,
+        verified_only: bool = False
     ) -> List[Contact]:
         """
         Search for contacts based on persona type
@@ -30,6 +31,7 @@ class SourcingWorkflow:
             organization_names: Optional list of company names to filter by
             max_contacts: Maximum number of contacts to retrieve
             reveal_emails: Whether to reveal personal emails (uses credits)
+            verified_only: If True, only return verified Apollo profiles
 
         Returns:
             List of Contact objects with persona assigned
@@ -47,7 +49,8 @@ class SourcingWorkflow:
             person_titles=filters.get("person_titles"),
             person_seniorities=filters.get("person_seniorities"),
             organization_names=organization_names,
-            max_results=max_contacts
+            max_results=max_contacts,
+            verified_only=verified_only
         )
 
         # Assign persona to each contact

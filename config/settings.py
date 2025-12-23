@@ -4,11 +4,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# OpenAI API
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-# Apollo.io API
-APOLLO_API_KEY = os.getenv("APOLLO_API_KEY")
+# Try to import streamlit secrets, fallback to environment variables
+try:
+    import streamlit as st
+    OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+    APOLLO_API_KEY = st.secrets.get("APOLLO_API_KEY") or os.getenv("APOLLO_API_KEY")
+except (ImportError, FileNotFoundError, KeyError):
+    # Fallback to environment variables if streamlit not available or secrets not configured
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    APOLLO_API_KEY = os.getenv("APOLLO_API_KEY")
 
 # Email Services
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
