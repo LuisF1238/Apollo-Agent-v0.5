@@ -419,7 +419,24 @@ class ApolloClient:
         )
 
 
-# Singleton instance
-apollo_client = ApolloClient()
+# Lazy singleton instance
+_apollo_client_instance = None
 
-__all__ = ["ApolloClient", "apollo_client"]
+def get_apollo_client() -> ApolloClient:
+    """Get or create the singleton apollo_client instance"""
+    global _apollo_client_instance
+    if _apollo_client_instance is None:
+        _apollo_client_instance = ApolloClient()
+    return _apollo_client_instance
+
+# For backward compatibility, create a property-like accessor
+class _ApolloClientProxy:
+    def __getattr__(self, name):
+        return getattr(get_apollo_client(), name)
+
+    def __call__(self, *args, **kwargs):
+        return get_apollo_client()(*args, **kwargs)
+
+apollo_client = _ApolloClientProxy()
+
+__all__ = ["ApolloClient", "apollo_client", "get_apollo_client"]
