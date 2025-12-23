@@ -7,9 +7,9 @@ load_dotenv()
 # Try to import streamlit secrets, fallback to environment variables
 try:
     import streamlit as st
-    OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-    APOLLO_API_KEY = st.secrets.get("APOLLO_API_KEY") or os.getenv("APOLLO_API_KEY")
-except (ImportError, FileNotFoundError, KeyError):
+    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"] if "OPENAI_API_KEY" in st.secrets else os.getenv("OPENAI_API_KEY")
+    APOLLO_API_KEY = st.secrets["APOLLO_API_KEY"] if "APOLLO_API_KEY" in st.secrets else os.getenv("APOLLO_API_KEY")
+except (ImportError, FileNotFoundError, KeyError, AttributeError):
     # Fallback to environment variables if streamlit not available or secrets not configured
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     APOLLO_API_KEY = os.getenv("APOLLO_API_KEY")
