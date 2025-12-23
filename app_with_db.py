@@ -22,16 +22,24 @@ st.set_page_config(
 )
 
 # Load authentication config from Streamlit secrets
+import copy
+
 try:
     # Try to use Streamlit secrets (for deployment)
-    if st.secrets.get("credentials"):
+    if "credentials" in st.secrets:
+        # Deep copy to make secrets mutable for authenticator
         config = {
-            'credentials': dict(st.secrets["credentials"]),
+            'credentials': {
+                'usernames': {
+                    username: dict(user_data)
+                    for username, user_data in st.secrets["credentials"]["usernames"].items()
+                }
+            },
             'cookie': dict(st.secrets["cookie"])
         }
     else:
         raise KeyError("credentials not in secrets")
-except (FileNotFoundError, KeyError):
+except (FileNotFoundError, KeyError, AttributeError):
     # Fallback to config.yaml or defaults (for local development)
     try:
         with open('config.yaml') as file:
@@ -331,12 +339,28 @@ with tab2:
                     st.session_state.export_files = files
                     st.success(f"✅ Export complete! Generated {sum(len(f) for f in files.values())} file(s)")
 
-                    # Display file list
+                    # Display file list with download buttons
                     st.subheader("Generated Files")
                     for persona_name, file_list in files.items():
                         st.markdown(f"**{persona_name}:**")
                         for file_path in file_list:
-                            st.write(f"  • `{file_path}`")
+                            col1, col2 = st.columns([3, 1])
+                            with col1:
+                                st.write(f"  • `{Path(file_path).name}`")
+                            with col2:
+                                # Read file and create download button
+                                try:
+                                    with open(file_path, "rb") as f:
+                                        file_data = f.read()
+                                    st.download_button(
+                                        label="⬇️ Download",
+                                        data=file_data,
+                                        file_name=Path(file_path).name,
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if file_path.endswith('.xlsx') else "text/csv",
+                                        key=f"download_{file_path}"
+                                    )
+                                except Exception as e:
+                                    st.error(f"Error: {str(e)}")
 
                 except Exception as e:
                     st.error(f"❌ Error during export: {str(e)}")
