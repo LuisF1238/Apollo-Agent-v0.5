@@ -161,27 +161,45 @@ with tab1:
     if not selected_personas:
         st.error("❌ Please select at least one persona to search")
     else:
+        st.subheader("Select a database")
+        ops = []
+        # Determine which radio buttons to show based on selected personas
         if "Social Good" in selected_personas:
-            st.subheader("Select a database")
-            db_choice = st.radio(
+            
+            ops.extend(["Social Good: For-Profit", "Social Good: Non-Profit"])
+
+        if "Consulting" in selected_personas or "External" in selected_personas:
+            ops.extend(["Fortune 1000", "Y-Combinator"])
+
+
+
+        db_choice = st.radio(
                 "Choose database:",
-                options=["Social Good: For-Profit", "Social Good: Non-Profit"],
+                options=ops,
                 horizontal=True
             )
-            
-            # Load the selected database
+        # Load the selected database
+        if db_choice:
             if "For-Profit" in db_choice:
                 df = pd.read_csv("databases/SG_FORPROFIT.csv")
                 st.write("**For-Profit Companies Database**")
-            else:
+            elif "Non-Profit" in db_choice:
                 df = pd.read_csv("databases/SG_NONPROFIT.csv")
                 st.write("**Non-Profit Companies Database**")
+            elif "Fortune" in db_choice:
+                df = pd.read_csv("databases/FORTUNE1000.csv")
+                df = df.drop("Rank", axis = 1)
+                st.write("**Fortune 1000 Companies Database (2024)**")
+            else:  # Y-Combinator
+                df = pd.read_csv("databases/YCOMBINATOR.csv")
+                df = df.drop("id", axis = 1)
+                st.write("**Y Combinator Companies Database**")
             
             # Display info about the dataframe
             st.info(f"📊 Database contains {len(df)} companies")
             
-            # Find the company name column (assuming it's the first column or contains 'name'/'company')
-            company_col = df.columns[0]  # Default to first column
+            # Find the company name column
+            company_col = df.columns[0]
             for col in df.columns:
                 if 'name' in col.lower() or 'company' in col.lower():
                     company_col = col
@@ -190,30 +208,31 @@ with tab1:
             st.write(f"*Company name column: {company_col}*")
             
             # Display dataframe with selection
-            event = st.dataframe(
+            selection = st.dataframe(
                 df,
-                key="company_dataframe",
+                key="data",
                 on_select="rerun",
-                selection_mode="multi-row",
-                use_container_width=True
+                selection_mode=["multi-row"],
             )
             
             # Handle selection
-            if event.selection.rows:
-                selected_indices = event.selection.rows
-                selected_companies = df.iloc[selected_indices][company_col].tolist()
+            if selection.selection.rows:
+                selected_indices = selection.selection.rows
+                selected_df = df.iloc[selected_indices]
+                selected_company_names = selected_df[company_col].tolist()
                 
+                st.write(f"**Selected {len(selected_company_names)} companies**")
                 
-                # Button to add selected companies
                 col1, col2 = st.columns(2)
+                
                 with col1:
                     if st.button("➕ Add Selected to Search List", type="primary"):
-                        # Get existing companies from text area
+                        # Get existing companies
                         existing = [c.strip() for c in st.session_state.selected_companies.split("\n") if c.strip()]
                         existing_set = set(existing)
                         
                         # Add new companies (avoid duplicates)
-                        new_companies = [c for c in selected_companies if c not in existing_set]
+                        new_companies = [str(c) for c in selected_company_names if str(c) not in existing_set]
                         
                         # Combine
                         all_companies = existing + new_companies
@@ -224,8 +243,8 @@ with tab1:
                 
                 with col2:
                     if st.button("🔄 Replace Search List", type="secondary"):
-                        st.session_state.selected_companies = "\n".join(selected_companies)
-                        st.success(f"✅ Replaced with {len(selected_companies)} companies!")
+                        st.session_state.selected_companies = "\n".join([str(c) for c in selected_company_names])
+                        st.success(f"✅ Replaced with {len(selected_company_names)} companies!")
                         st.rerun()
             
             # Show current search list
@@ -240,6 +259,7 @@ with tab1:
                         st.session_state.selected_companies = ""
                         st.success("✅ Search list cleared!")
                         st.rerun()
+
 
 
 with tab2:
