@@ -13,6 +13,8 @@ import pandas as pd
 import streamlit_authenticator as stauth
 import yaml
 from yaml.loader import SafeLoader
+from config.title_groups import TITLE_GROUPS
+import math
 
 # Page config
 st.set_page_config(
@@ -99,6 +101,9 @@ if "selected_companies" not in st.session_state:
     st.session_state.selected_companies = ""
 if "dataframe_selection" not in st.session_state:
     st.session_state.dataframe_selection = None
+if "selected_title_groups" not in st.session_state:
+    st.session_state.selected_title_groups = []
+
 
 # Title and description
 st.title("🔍 DSS Sourcing Agent")
@@ -265,6 +270,16 @@ with tab1:
 with tab2:
     st.header("2. Search Contacts")
 
+    st.subheader("🎯 Target Titles")
+
+    selected_title_groups = st.multiselect(
+        label="Select priority roles to balance results across",
+        options=list(TITLE_GROUPS.keys()),
+        default=[],
+        help="Contacts will be evenly sampled across selected roles"
+    )
+    st.session_state.selected_title_groups = selected_title_groups
+
     if st.button("🚀 Search All Contacts", type="primary", help="Search Apollo for all selected personas"):
         if not selected_personas:
             st.error("❌ Please select at least one persona to search")
@@ -279,23 +294,60 @@ with tab2:
 
                     # Search each persona
                     workflow = st.session_state.workflow_instance
+                    total_requested = contacts_per_persona
+                    title_groups = st.session_state.get("selected_title_groups", [])
+
+                    if title_groups:
+                        per_group_limit = math.ceil(total_requested / len(title_groups))
+                    else:
+                        per_group_limit = total_requested
                     all_results = {}
 
                     for persona in personas_to_search:
                         st.write(f"🔍 Searching {persona.value} contacts (requesting {contacts_per_persona})...")
-                        contacts = workflow.search_by_persona(
-                            persona=persona,
-                            organization_names=companies_list,
-                            max_contacts=contacts_per_persona,
-                            verified_only=verified_only
-                        )
-                        all_results[persona.value] = contacts
-                        st.write(f"✓ Found {len(contacts)} {persona.value} contacts")
 
-                        # Debug info
-                        if len(contacts) < contacts_per_persona:
-                            st.info(f"ℹ️ Requested {contacts_per_persona} but only {len(contacts)} available from Apollo")
+                        persona_contacts = []
 
+                        selected_title_groups = st.session_state.get("selected_title_groups", [])
+
+                        # if titles selected, then balance search
+                        if selected_title_groups:
+                            per_group_limit = math.ceil(contacts_per_persona / len(selected_title_groups))
+
+                            for group in selected_title_groups:
+                                st.write(f"   • {group} (up to {per_group_limit})")
+
+                                contacts = workflow.search_by_persona(
+                                    persona=persona,
+                                    organization_names=companies_list,
+                                    max_contacts=per_group_limit,
+                                    verified_only=verified_only,
+                                    override_titles=TITLE_GROUPS[group]  
+                                )
+
+                                persona_contacts.extend(contacts)
+
+                            # keep desired # of contacts in case we scrape too many
+                            persona_contacts = persona_contacts[:contacts_per_persona]
+
+                        # no title selection, do what it did originally
+                        else:
+                            persona_contacts = workflow.search_by_persona(
+                                persona=persona,
+                                organization_names=companies_list,
+                                max_contacts=contacts_per_persona,
+                                verified_only=verified_only
+                            )
+
+                        all_results[persona.value] = persona_contacts
+
+                        st.write(f"✓ Found {len(persona_contacts)} {persona.value} contacts")
+
+                        if len(persona_contacts) < contacts_per_persona:
+                            st.info(
+                                f"ℹ️ Requested {contacts_per_persona} but only "
+                                f"{len(persona_contacts)} available from Apollo"
+                            )
                     st.session_state.search_results = all_results
                     st.success(f"✅ Search completed! Found {sum(len(c) for c in all_results.values())} total contacts")
 

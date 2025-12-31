@@ -21,30 +21,28 @@ class SourcingWorkflow:
         organization_names: Optional[List[str]] = None,
         max_contacts: int = 500,
         reveal_emails: bool = False,
-        verified_only: bool = False
+        verified_only: bool = False,
+        override_titles: Optional[List[str]] = None  # 👈 NEW
     ) -> List[Contact]:
         """
-        Search for contacts based on persona type
-
-        Args:
-            persona: PersonaType (Consulting, Social Good, External)
-            organization_names: Optional list of company names to filter by
-            max_contacts: Maximum number of contacts to retrieve
-            reveal_emails: Whether to reveal personal emails (uses credits)
-            verified_only: If True, only return verified Apollo profiles
-
-        Returns:
-            List of Contact objects with persona assigned
+        Search for contacts based on persona type, optionally overriding titles
         """
+
         print(f"\n{'='*60}")
         print(f"WORKFLOW: search_by_persona called with max_contacts={max_contacts}")
         print(f"WORKFLOW: persona={persona.value}, organizations={organization_names}")
+        if override_titles:
+            print(f"WORKFLOW: overriding titles ({len(override_titles)})")
         print(f"{'='*60}\n")
 
         # Get persona-specific filters
-        filters = get_persona_filters(persona)
+        filters = get_persona_filters(persona).copy()
 
-        # Search Apollo
+        # will override the preset titles if certain titles toggled
+        if override_titles:
+            filters["person_titles"] = override_titles
+
+        # search Apollo
         contacts = self.apollo_client.search_contacts_to_models(
             person_titles=filters.get("person_titles"),
             person_seniorities=filters.get("person_seniorities"),
@@ -53,84 +51,85 @@ class SourcingWorkflow:
             verified_only=verified_only
         )
 
-        # Assign persona to each contact
+        # assign persona to each contact
         for contact in contacts:
             contact.persona = persona
 
         return contacts
 
-    def search_all_personas(
-        self,
-        organization_names: Optional[List[str]] = None,
-        contacts_per_persona: int = 500,
-        reveal_emails: bool = False
-    ) -> Dict[PersonaType, List[Contact]]:
-        """
-        Search for contacts across all persona types
 
-        Args:
-            organization_names: Optional list of company names to filter by
-            contacts_per_persona: Number of contacts per persona
-            reveal_emails: Whether to reveal personal emails (uses credits)
+        def search_all_personas(
+            self,
+            organization_names: Optional[List[str]] = None,
+            contacts_per_persona: int = 500,
+            reveal_emails: bool = False
+        ) -> Dict[PersonaType, List[Contact]]:
+            """
+            Search for contacts across all persona types
 
-        Returns:
-            Dictionary mapping PersonaType to list of contacts
-        """
-        results = {}
+            Args:
+                organization_names: Optional list of company names to filter by
+                contacts_per_persona: Number of contacts per persona
+                reveal_emails: Whether to reveal personal emails (uses credits)
 
-        for persona in PersonaType:
-            print(f"🔍 Searching for {persona.value} contacts...")
+            Returns:
+                Dictionary mapping PersonaType to list of contacts
+            """
+            results = {}
+
+            for persona in PersonaType:
+                print(f"🔍 Searching for {persona.value} contacts...")
+                contacts = self.search_by_persona(
+                    persona=persona,
+                    organization_names=organization_names,
+                    max_contacts=contacts_per_persona,
+                    reveal_emails=reveal_emails
+                )
+                results[persona] = contacts
+                print(f"✓ Found {len(contacts)} {persona.value} contacts")
+
+            return results
+
+        def search_and_export(
+            self,
+            persona: PersonaType,
+            output_path: str,
+            organization_names: Optional[List[str]] = None,
+            max_contacts: int = 500,
+            file_format: str = "csv",
+            max_per_file: int = 100
+        ) -> List[str]:
+            """
+            Search for contacts and export to spreadsheet(s)
+
+            Args:
+                persona: PersonaType to search for
+                output_path: Base path for output files
+                organization_names: Optional list of company names
+                max_contacts: Maximum contacts to retrieve
+                file_format: 'csv' or 'excel'
+                max_per_file: Maximum contacts per file (default: 100)
+
+            Returns:
+                List of generated file paths
+            """
+            # Search for contacts
             contacts = self.search_by_persona(
                 persona=persona,
                 organization_names=organization_names,
-                max_contacts=contacts_per_persona,
-                reveal_emails=reveal_emails
+                max_contacts=max_contacts
             )
-            results[persona] = contacts
-            print(f"✓ Found {len(contacts)} {persona.value} contacts")
 
-        return results
+            if not contacts:
+                raise ValueError(f"No contacts found for persona: {persona.value}")
 
-    def search_and_export(
-        self,
-        persona: PersonaType,
-        output_path: str,
-        organization_names: Optional[List[str]] = None,
-        max_contacts: int = 500,
-        file_format: str = "csv",
-        max_per_file: int = 100
-    ) -> List[str]:
-        """
-        Search for contacts and export to spreadsheet(s)
+            # Export to spreadsheet
+            if file_format.lower() == "excel":
+                files = export_to_excel(contacts, output_path, max_per_file)
+            else:
+                files = export_to_csv(contacts, output_path, max_per_file)
 
-        Args:
-            persona: PersonaType to search for
-            output_path: Base path for output files
-            organization_names: Optional list of company names
-            max_contacts: Maximum contacts to retrieve
-            file_format: 'csv' or 'excel'
-            max_per_file: Maximum contacts per file (default: 100)
-
-        Returns:
-            List of generated file paths
-        """
-        # Search for contacts
-        contacts = self.search_by_persona(
-            persona=persona,
-            organization_names=organization_names,
-            max_contacts=max_contacts
-        )
-
-        if not contacts:
-            raise ValueError(f"No contacts found for persona: {persona.value}")
-
-        # Export to spreadsheet
-        if file_format.lower() == "excel":
-            files = export_to_excel(contacts, output_path, max_per_file)
-        else:
-            files = export_to_csv(contacts, output_path, max_per_file)
-
-        return files
+            return files
 
     def search_all_and_export(
         self,
