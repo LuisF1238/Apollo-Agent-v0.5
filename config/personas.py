@@ -150,6 +150,11 @@ PERSONA_FILTERS: Dict[PersonaType, Dict[str, Any]] = {
     },
     PersonaType.EXTERNAL: {
         "person_titles": [
+            "Talent Acquisition Specialist",
+            "Recruitment Consultant",
+            "Talent Partner",
+            "Sourcing Specialist",
+            "Recruitment Coordinator",
             "Data Scientist",
             "Senior Data Scientist",
             "Lead Data Scientist",
@@ -158,6 +163,7 @@ PERSONA_FILTERS: Dict[PersonaType, Dict[str, Any]] = {
             "Machine Learning Engineer",
             "Data Engineer",
             "Applied Scientist"
+            
         ],
         "organization_industries": [
             "Technology",

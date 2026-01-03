@@ -24,5 +24,15 @@ TITLE_GROUPS = {
         "VP Data",
         "VP Analytics",
         "VP Engineering"
+    ],
+    "Recruiter": [
+        "Recruitment",
+        "Recruiting",
+        "Talent Acquisition Specialist",
+        "Recruitment Consultant",
+        "Talent Partner",
+        "Sourcing Specialist",
+        "Recruitment Coordinator"
     ]
+
 }
