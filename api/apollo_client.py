@@ -202,11 +202,12 @@ class ApolloClient:
         """
         # If multiple companies specified, search each one separately and combine
         if organization_names and len(organization_names) > 1:
+            import time
             print(f"Searching {len(organization_names)} companies separately...")
             all_contacts = []
             results_per_company = max(1, max_results // len(organization_names))
 
-            for org_name in organization_names:
+            for idx, org_name in enumerate(organization_names):
                 print(f"Searching company: {org_name}")
                 company_contacts = self._search_single_company(
                     person_titles=person_titles,
@@ -218,6 +219,11 @@ class ApolloClient:
                 )
                 print(f"Found {len(company_contacts)} contacts for {org_name}")
                 all_contacts.extend(company_contacts)
+
+                # Add 1.5 second delay between companies to avoid per-minute rate limit
+                # Apollo limit: 50 requests/minute = 1 request per 1.2 seconds
+                if idx < len(organization_names) - 1:
+                    time.sleep(1.5)
 
             print(f"Total contacts from all companies: {len(all_contacts)}")
             return all_contacts[:max_results]
