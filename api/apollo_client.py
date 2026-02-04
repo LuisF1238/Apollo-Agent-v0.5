@@ -198,9 +198,63 @@ class ApolloClient:
         Returns:
             List of Contact objects
         """
+        # If multiple companies specified, search each one separately and combine
+        if organization_names and len(organization_names) > 1:
+            print(f"Searching {len(organization_names)} companies separately...")
+            all_contacts = []
+            results_per_company = max(1, max_results // len(organization_names))
+
+            for org_name in organization_names:
+                print(f"Searching company: {org_name}")
+                company_contacts = self._search_single_company(
+                    person_titles=person_titles,
+                    organization_name=org_name,
+                    person_seniorities=person_seniorities,
+                    max_results=results_per_company,
+                    verified_only=verified_only
+                )
+                print(f"Found {len(company_contacts)} contacts for {org_name}")
+                all_contacts.extend(company_contacts)
+
+            print(f"Total contacts from all companies: {len(all_contacts)}")
+            return all_contacts[:max_results]
+        else:
+            # Single or no company - use existing logic
+            return self._search_single_company(
+                person_titles=person_titles,
+                organization_name=organization_names[0] if organization_names else None,
+                person_seniorities=person_seniorities,
+                max_results=max_results,
+                verified_only=verified_only
+            )
+
+    def _search_single_company(
+        self,
+        person_titles: Optional[List[str]] = None,
+        organization_name: Optional[str] = None,
+        person_seniorities: Optional[List[str]] = None,
+        max_results: int = 25,
+        verified_only: bool = False
+    ) -> List[Contact]:
+        """
+        Search for contacts from a single company with pagination support
+
+        Args:
+            person_titles: List of job titles
+            organization_name: Single company name
+            person_seniorities: List of seniority levels
+            max_results: Maximum number of results to return
+            verified_only: If True, only return verified Apollo profiles
+
+        Returns:
+            List of Contact objects
+        """
         contacts = []
         page = 1
         per_page = 100  # Apollo max per page
+
+        # Convert single organization_name to list for API call
+        org_names_list = [organization_name] if organization_name else None
 
         while len(contacts) < max_results:
             # Calculate how many more we need
@@ -211,7 +265,7 @@ class ApolloClient:
 
             results = self.search_people(
                 person_titles=person_titles,
-                organization_names=organization_names,
+                organization_names=org_names_list,
                 person_seniorities=person_seniorities,
                 page=page,
                 per_page=current_per_page,

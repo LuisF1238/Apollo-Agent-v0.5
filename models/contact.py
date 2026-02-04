@@ -9,6 +9,7 @@ class PersonaType(str, Enum):
     CONSULTING = "Consulting"
     SOCIAL_GOOD = "Social Good"
     EXTERNAL = "External"
+    STARTUP_CAREER_FAIR = "Startup Career Fair"
 
 
 class ConnectionPoint(BaseModel):

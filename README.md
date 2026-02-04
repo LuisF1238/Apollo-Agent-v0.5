@@ -79,7 +79,7 @@ OPENAI_API_KEY=your_openai_api_key_here  # Optional: for email generation featur
 
 Launch the interactive web interface:
 ```bash
-streamlit run streamlit_app.py
+streamlit run app_with_db.py
 ```
 
 The application will open in your browser with the following workflow:
@@ -206,5 +206,5 @@ Add new persona types in [models/contact.py](models/contact.py) and configure fi
 
 ## Credits
 
-From the Fall 25 Newbies: Luis, Lauren, Praneel
+From the Fall 25 Newbies: Luis, Lauren
 

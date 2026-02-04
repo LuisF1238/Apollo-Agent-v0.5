@@ -163,7 +163,7 @@ PERSONA_FILTERS: Dict[PersonaType, Dict[str, Any]] = {
             "Machine Learning Engineer",
             "Data Engineer",
             "Applied Scientist"
-            
+
         ],
         "organization_industries": [
             "Technology",
@@ -175,6 +175,52 @@ PERSONA_FILTERS: Dict[PersonaType, Dict[str, Any]] = {
         ],
         "q_keywords": "data science machine learning AI",
         "description": "Data Scientists in external tech companies"
+    },
+    PersonaType.STARTUP_CAREER_FAIR: {
+        "person_titles": [
+            "Recruiter",
+            "Talent Acquisition Specialist",
+            "Talent Acquisition Partner",
+            "Talent Acquisition Recruiter",
+            "Talent Partner",
+            "Talent Specialist",
+            "Talent Advisor",
+            "Recruiting Specialist",
+            "Recruiting Partner",
+            "Recruiting Manager",
+            "Recruiting Lead",
+            "Recruiting Coordinator",
+            "Talent Acquisition Coordinator",
+            "Recruitment Coordinator",
+            "Sourcer",
+            "Talent Sourcer",
+            "Technical Sourcer",
+            "Recruiting Sourcer",
+            "Technical Recruiter",
+            "Senior Technical Recruiter",
+            "Principal Recruiter",
+            "Lead Recruiter",
+            "University Recruiter",
+            "Campus Recruiter",
+            "Early Career Recruiter",
+            "Diversity Recruiter",
+            "Staffing Specialist",
+            "Staffing Recruiter",
+            "Staffing Manager",
+            "RPO Recruiter",
+            "Head of Recruiting",
+            "Head of Talent",
+            "Director of Recruiting",
+            "Director of Talent Acquisition",
+            "VP of Talent Acquisition",
+            "VP of Recruiting",
+            "Chief People Officer"
+        ],
+        "person_seniorities": ["founder", "manager", "vp", "head", "director", "senior"],
+        "person_locations": ["San Francisco Bay Area"],
+        "organization_num_employees_ranges": ["1,10", "11,20", "21,50", "51,100", "101,200", "201,500"],
+        "q_keywords": "startup AI machine learning data science software development data solutions cybersecurity tech YC Y Combinator",
+        "description": "Recruiters and Talent Acquisition professionals at startups in the San Francisco Bay Area"
     }
 }
 

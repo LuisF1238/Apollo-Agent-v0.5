@@ -13,8 +13,6 @@ import pandas as pd
 import streamlit_authenticator as stauth
 import yaml
 from yaml.loader import SafeLoader
-from config.title_groups import TITLE_GROUPS
-import math
 
 # Page config
 st.set_page_config(
@@ -101,9 +99,6 @@ if "selected_companies" not in st.session_state:
     st.session_state.selected_companies = ""
 if "dataframe_selection" not in st.session_state:
     st.session_state.dataframe_selection = None
-if "selected_title_groups" not in st.session_state:
-    st.session_state.selected_title_groups = []
-
 
 # Title and description
 st.title("🔍 DSS Sourcing Agent")
@@ -166,119 +161,142 @@ with tab1:
     if not selected_personas:
         st.error("❌ Please select at least one persona to search")
     else:
-        st.subheader("Select a database")
-        ops = []
-        # Determine which radio buttons to show based on selected personas
-        if "Social Good" in selected_personas:
-            
-            ops.extend(["Social Good: For-Profit", "Social Good: Non-Profit"])
+        # Determine which databases to show
+        show_social_good = "Social Good" in selected_personas
+        show_external = "External" in selected_personas
+        show_startup_career_fair = "Startup Career Fair" in selected_personas
 
-        if "Consulting" in selected_personas or "External" in selected_personas:
-            ops.extend(["Fortune 1000", "Y-Combinator"])
+        if show_social_good or show_external or show_startup_career_fair:
+            st.subheader("Select a database")
 
+            # Build database options based on selected personas
+            db_options = []
+            if show_social_good:
+                db_options.extend(["Social Good: For-Profit", "Social Good: Non-Profit"])
+            if show_external:
+                db_options.append("External: Y-Combinator")
+            if show_startup_career_fair:
+                db_options.extend(["Startup Career Fair: Y-Combinator (Bay Area)", "Startup Career Fair: YC_Reamining_Batch"])
 
-
-        db_choice = st.radio(
+            db_choice = st.radio(
                 "Choose database:",
-                options=ops,
+                options=db_options,
                 horizontal=True
             )
-        # Load the selected database
-        if db_choice:
-            if "For-Profit" in db_choice:
-                df = pd.read_csv("databases/SG_FORPROFIT.csv")
-                st.write("**For-Profit Companies Database**")
-            elif "Non-Profit" in db_choice:
-                df = pd.read_csv("databases/SG_NONPROFIT.csv")
-                st.write("**Non-Profit Companies Database**")
-            elif "Fortune" in db_choice:
-                df = pd.read_csv("databases/FORTUNE1000.csv")
-                df = df.drop("Rank", axis = 1)
-                st.write("**Fortune 1000 Companies Database (2024)**")
-            else:  # Y-Combinator
-                df = pd.read_csv("databases/YCOMBINATOR.csv")
-                df = df.drop("id", axis = 1)
-                st.write("**Y Combinator Companies Database**")
-            
-            # Display info about the dataframe
-            st.info(f"📊 Database contains {len(df)} companies")
-            
-            # Find the company name column
-            company_col = df.columns[0]
-            for col in df.columns:
-                if 'name' in col.lower() or 'company' in col.lower():
-                    company_col = col
-                    break
-            
-            st.write(f"*Company name column: {company_col}*")
-            
-            # Display dataframe with selection
-            selection = st.dataframe(
-                df,
-                key="data",
-                on_select="rerun",
-                selection_mode=["multi-row"],
-            )
-            
-            # Handle selection
-            if selection.selection.rows:
-                selected_indices = selection.selection.rows
-                selected_df = df.iloc[selected_indices]
-                selected_company_names = selected_df[company_col].tolist()
-                
-                st.write(f"**Selected {len(selected_company_names)} companies**")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    if st.button("➕ Add Selected to Search List", type="primary"):
-                        # Get existing companies
-                        existing = [c.strip() for c in st.session_state.selected_companies.split("\n") if c.strip()]
-                        existing_set = set(existing)
-                        
-                        # Add new companies (avoid duplicates)
-                        new_companies = [str(c) for c in selected_company_names if str(c) not in existing_set]
-                        
-                        # Combine
-                        all_companies = existing + new_companies
-                        st.session_state.selected_companies = "\n".join(all_companies)
-                        
-                        st.success(f"✅ Added {len(new_companies)} new companies!")
-                        st.rerun()
-                
-                with col2:
-                    if st.button("🔄 Replace Search List", type="secondary"):
-                        st.session_state.selected_companies = "\n".join([str(c) for c in selected_company_names])
-                        st.success(f"✅ Replaced with {len(selected_company_names)} companies!")
-                        st.rerun()
-            
-            # Show current search list
-            if st.session_state.selected_companies.strip():
-                with st.expander("📋 Current Search List"):
-                    companies_list = [c.strip() for c in st.session_state.selected_companies.split("\n") if c.strip()]
-                    st.write(f"**{len(companies_list)} companies in search list:**")
-                    for i, company in enumerate(companies_list, 1):
-                        st.write(f"{i}. {company}")
-                    
-                    if st.button("🗑️ Clear Search List"):
-                        st.session_state.selected_companies = ""
-                        st.success("✅ Search list cleared!")
-                        st.rerun()
 
+            # Load the selected database
+            df = None
+            if "Social Good: For-Profit" == db_choice:
+                df = pd.read_csv("databases/SG_FORPROFIT.csv")
+                st.write("**Social Good For-Profit Companies Database**")
+            elif "Social Good: Non-Profit" == db_choice:
+                df = pd.read_csv("databases/SG_NONPROFIT.csv")
+                st.write("**Social Good Non-Profit Companies Database**")
+            elif "External: Y-Combinator" == db_choice:
+                # Check if Y-Combinator database exists
+                yc_path = Path("databases/YC_COMPANIES.csv")
+                if yc_path.exists():
+                    df = pd.read_csv("databases/YC_COMPANIES.csv")
+                    st.write("**Y-Combinator Companies Database**")
+                else:
+                    st.warning("⚠️ Y-Combinator database not found. Please add `databases/YC_COMPANIES.csv`")
+            elif "Startup Career Fair: Y-Combinator (Bay Area)" == db_choice:
+                # Check if Y-Combinator database exists
+                yc_path = Path("databases/YC_COMPANIES.csv")
+                if yc_path.exists():
+                    df_full = pd.read_csv("databases/YC_COMPANIES.csv")
+                    # Filter for Bay Area companies only
+                    bay_area_keywords = ["San Francisco", "SF", "Bay Area", "Oakland", "Berkeley", "Palo Alto",
+                                        "Mountain View", "Sunnyvale", "San Jose", "Santa Clara", "Redwood City",
+                                        "Menlo Park", "Cupertino", "Fremont", "San Mateo", "Hayward", "Alameda"]
+                    # Check if all_locations column exists
+                    if 'all_locations' in df_full.columns:
+                        df = df_full[df_full['all_locations'].str.contains('|'.join(bay_area_keywords), case=False, na=False)]
+                    else:
+                        df = df_full
+                        st.warning("⚠️ Location column not found. Showing all companies.")
+                    st.write(f"**Y-Combinator Bay Area Companies Database** (filtered from {len(df_full)} to {len(df)} companies)")
+                else:
+                    st.warning("⚠️ Y-Combinator database not found. Please add `databases/YC_COMPANIES.csv`")
+            elif "Startup Career Fair: YC_Reamining_Batch" == db_choice:
+                # Check if YC_Reamining_Batch database exists
+                custom_path = Path("databases/YC_Reamining_Batch.csv")
+                if custom_path.exists():
+                    df = pd.read_csv("databases/YC_Reamining_Batch.csv")
+                    st.write("**YC_Reamining_Batch Database** (Curated list of 2,511 companies)")
+                else:
+                    st.warning("⚠️ YC_Reamining_Batch database not found. Please add `databases/YC_Reamining_Batch.csv`")
+
+            if df is not None:
+                # Display info about the dataframe
+                st.info(f"📊 Database contains {len(df)} companies")
+
+                # Find the company name column (assuming it's the first column or contains 'name'/'company')
+                company_col = df.columns[0]  # Default to first column
+                for col in df.columns:
+                    if 'name' in col.lower() or 'company' in col.lower():
+                        company_col = col
+                        break
+
+                st.write(f"*Company name column: {company_col}*")
+
+                # Display dataframe with selection
+                event = st.dataframe(
+                    df,
+                    key="company_dataframe",
+                    on_select="rerun",
+                    selection_mode="multi-row",
+                    use_container_width=True
+                )
+
+                # Handle selection
+                if event.selection.rows:
+                    selected_indices = event.selection.rows
+                    selected_companies = df.iloc[selected_indices][company_col].tolist()
+
+
+                    # Button to add selected companies
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("➕ Add Selected to Search List", type="primary"):
+                            # Get existing companies from text area
+                            existing = [c.strip() for c in st.session_state.selected_companies.split("\n") if c.strip()]
+                            existing_set = set(existing)
+
+                            # Add new companies (avoid duplicates)
+                            new_companies = [c for c in selected_companies if c not in existing_set]
+
+                            # Combine
+                            all_companies = existing + new_companies
+                            st.session_state.selected_companies = "\n".join(all_companies)
+
+                            st.success(f"✅ Added {len(new_companies)} new companies!")
+                            st.rerun()
+
+                    with col2:
+                        if st.button("🔄 Replace Search List", type="secondary"):
+                            st.session_state.selected_companies = "\n".join(selected_companies)
+                            st.success(f"✅ Replaced with {len(selected_companies)} companies!")
+                            st.rerun()
+
+                # Show current search list
+                if st.session_state.selected_companies.strip():
+                    with st.expander("📋 Current Search List"):
+                        companies_list = [c.strip() for c in st.session_state.selected_companies.split("\n") if c.strip()]
+                        st.write(f"**{len(companies_list)} companies in search list:**")
+                        for i, company in enumerate(companies_list, 1):
+                            st.write(f"{i}. {company}")
+
+                        if st.button("🗑️ Clear Search List"):
+                            st.session_state.selected_companies = ""
+                            st.success("✅ Search list cleared!")
+                            st.rerun()
+        else:
+            st.info("ℹ️ Select 'Social Good', 'External', or 'Startup Career Fair' persona to access company databases")
 
 
 with tab2:
     st.header("2. Search Contacts")
-
-    st.subheader("🎯 Target Titles")
-
-    selected_title_groups = st.multiselect(
-        label="Select priority roles to balance results across",
-        options=list(TITLE_GROUPS.keys()),
-        default=[],
-        help="Contacts will be evenly sampled across selected roles"
-    )
-    st.session_state.selected_title_groups = selected_title_groups
 
     if st.button("🚀 Search All Contacts", type="primary", help="Search Apollo for all selected personas"):
         if not selected_personas:
@@ -294,60 +312,23 @@ with tab2:
 
                     # Search each persona
                     workflow = st.session_state.workflow_instance
-                    total_requested = contacts_per_persona
-                    title_groups = st.session_state.get("selected_title_groups", [])
-
-                    if title_groups:
-                        per_group_limit = math.ceil(total_requested / len(title_groups))
-                    else:
-                        per_group_limit = total_requested
                     all_results = {}
 
                     for persona in personas_to_search:
                         st.write(f"🔍 Searching {persona.value} contacts (requesting {contacts_per_persona})...")
+                        contacts = workflow.search_by_persona(
+                            persona=persona,
+                            organization_names=companies_list,
+                            max_contacts=contacts_per_persona,
+                            verified_only=verified_only
+                        )
+                        all_results[persona.value] = contacts
+                        st.write(f"✓ Found {len(contacts)} {persona.value} contacts")
 
-                        persona_contacts = []
+                        # Debug info
+                        if len(contacts) < contacts_per_persona:
+                            st.info(f"ℹ️ Requested {contacts_per_persona} but only {len(contacts)} available from Apollo")
 
-                        selected_title_groups = st.session_state.get("selected_title_groups", [])
-
-                        # if titles selected, then balance search
-                        if selected_title_groups:
-                            per_group_limit = math.ceil(contacts_per_persona / len(selected_title_groups))
-
-                            for group in selected_title_groups:
-                                st.write(f"   • {group} (up to {per_group_limit})")
-
-                                contacts = workflow.search_by_persona(
-                                    persona=persona,
-                                    organization_names=companies_list,
-                                    max_contacts=per_group_limit,
-                                    verified_only=verified_only,
-                                    override_titles=TITLE_GROUPS[group]  
-                                )
-
-                                persona_contacts.extend(contacts)
-
-                            # keep desired # of contacts in case we scrape too many
-                            persona_contacts = persona_contacts[:contacts_per_persona]
-
-                        # no title selection, do what it did originally
-                        else:
-                            persona_contacts = workflow.search_by_persona(
-                                persona=persona,
-                                organization_names=companies_list,
-                                max_contacts=contacts_per_persona,
-                                verified_only=verified_only
-                            )
-
-                        all_results[persona.value] = persona_contacts
-
-                        st.write(f"✓ Found {len(persona_contacts)} {persona.value} contacts")
-
-                        if len(persona_contacts) < contacts_per_persona:
-                            st.info(
-                                f"ℹ️ Requested {contacts_per_persona} but only "
-                                f"{len(persona_contacts)} available from Apollo"
-                            )
                     st.session_state.search_results = all_results
                     st.success(f"✅ Search completed! Found {sum(len(c) for c in all_results.values())} total contacts")
 
@@ -366,24 +347,65 @@ with tab2:
 
     # Export section
     if st.session_state.search_results:
-        st.header("2. Export to Spreadsheets")
+        st.header("3. Export to Spreadsheets")
 
-        col1, col2 = st.columns([2, 1])
+        # Company filter for export
+        st.subheader("Filter by Companies")
 
-        with col1:
-            output_dir = st.text_input(
-                "Output Directory",
-                value="./exports",
-                help="Directory where spreadsheets will be saved"
+        # Extract unique companies from search results
+        all_companies = set()
+        for contacts in st.session_state.search_results.values():
+            for contact in contacts:
+                if contact.company:
+                    all_companies.add(contact.company)
+
+        all_companies = sorted(list(all_companies))
+
+        if all_companies:
+            export_mode = st.radio(
+                "Export Mode",
+                ["All Contacts", "Filter by Companies"],
+                help="Choose whether to export all contacts or filter by specific companies"
             )
 
-        with col2:
-            st.write("")  # Spacing
-            st.write("")  # Spacing
-            export_button = st.button("📊 Export All", type="secondary")
+            selected_companies = []
+            if export_mode == "Filter by Companies":
+                selected_companies = st.multiselect(
+                    "Select Companies to Export",
+                    options=all_companies,
+                    default=[],
+                    help="Select one or more companies. Each company will be exported to separate files."
+                )
 
-        if export_button:
-            with st.spinner("Exporting to spreadsheets..."):
+                if selected_companies:
+                    st.info(f"📊 Will export {len(selected_companies)} compan{'y' if len(selected_companies) == 1 else 'ies'} separately")
+        else:
+            export_mode = "All Contacts"
+            selected_companies = []
+            st.info("No companies found in search results")
+
+        output_dir = st.text_input(
+            "Output Directory",
+            value="./exports",
+            help="Directory where spreadsheets will be saved"
+        )
+
+        # Export buttons
+        col1, col2 = st.columns(2)
+
+        with col1:
+            export_all_button = st.button("📊 Export All Contacts", type="primary", use_container_width=True)
+
+        with col2:
+            if export_mode == "Filter by Companies" and not selected_companies:
+                st.button("🏢 Export Selected Companies", type="secondary", disabled=True, help="Select at least one company", use_container_width=True)
+                export_filtered_button = False
+            else:
+                export_filtered_button = st.button("🏢 Export Selected Companies", type="secondary", use_container_width=True, disabled=(export_mode == "All Contacts"))
+
+        # Handle Export All button
+        if export_all_button:
+            with st.spinner("Exporting all contacts to spreadsheets..."):
                 try:
                     # Flatten all contacts and merge in revealed emails
                     all_contacts = []
@@ -398,9 +420,10 @@ with tab2:
                                 # Use the original
                                 all_contacts.append(contact)
 
-                    # Export by persona
+                    # Import export functions
                     from utils.spreadsheet_generator import export_by_persona
 
+                    # Export by persona (existing behavior)
                     files = export_by_persona(
                         contacts=all_contacts,
                         output_dir=output_dir,
@@ -413,8 +436,8 @@ with tab2:
 
                     # Display file list with download buttons
                     st.subheader("Generated Files")
-                    for persona_name, file_list in files.items():
-                        st.markdown(f"**{persona_name}:**")
+                    for group_name, file_list in files.items():
+                        st.markdown(f"**{group_name}:**")
                         for file_path in file_list:
                             col1, col2 = st.columns([3, 1])
                             with col1:
@@ -440,9 +463,73 @@ with tab2:
                     with st.expander("Error Details"):
                         st.code(traceback.format_exc())
 
+        # Handle Export Selected Companies button
+        if export_filtered_button:
+            with st.spinner("Exporting selected companies to spreadsheets..."):
+                try:
+                    # Flatten all contacts and merge in revealed emails
+                    all_contacts = []
+                    for persona_name, contacts in st.session_state.search_results.items():
+                        for idx, contact in enumerate(contacts):
+                            # Check if this contact has been enriched
+                            contact_id = f"{contact.name}_{contact.apollo_id or idx}_{persona_name}"
+                            if contact_id in st.session_state.revealed_emails:
+                                # Use the enriched version
+                                all_contacts.append(st.session_state.revealed_emails[contact_id])
+                            else:
+                                # Use the original
+                                all_contacts.append(contact)
+
+                    # Filter by selected companies
+                    filtered_contacts = [c for c in all_contacts if c.company in selected_companies]
+                    st.info(f"📊 Filtered to {len(filtered_contacts)} contacts from {len(selected_companies)} compan{'y' if len(selected_companies) == 1 else 'ies'}")
+
+                    if not filtered_contacts:
+                        st.warning("⚠️ No contacts found matching the selected filters")
+                    else:
+                        # Import export functions
+                        from utils.spreadsheet_generator import export_by_company_single_file
+
+                        # Export by company (one file with multiple sheets)
+                        file_path = export_by_company_single_file(
+                            contacts=filtered_contacts,
+                            output_dir=output_dir,
+                            max_per_sheet=max_per_file,
+                            file_format=file_format.lower()
+                        )
+
+                        st.session_state.export_files = {"Selected Companies": [file_path]}
+                        st.success(f"✅ Export complete! Generated 1 file with {len(selected_companies)} sheet(s)")
+
+                        # Display file with download button
+                        st.subheader("Generated File")
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.write(f"  • `{Path(file_path).name}` ({len(selected_companies)} companies)")
+                        with col2:
+                            # Read file and create download button
+                            try:
+                                with open(file_path, "rb") as f:
+                                    file_data = f.read()
+                                st.download_button(
+                                    label="⬇️ Download",
+                                    data=file_data,
+                                    file_name=Path(file_path).name,
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if file_path.endswith('.xlsx') else "text/csv",
+                                    key=f"download_{file_path}"
+                                )
+                            except Exception as e:
+                                st.error(f"Error: {str(e)}")
+
+                except Exception as e:
+                    st.error(f"❌ Error during export: {str(e)}")
+                    import traceback
+                    with st.expander("Error Details"):
+                        st.code(traceback.format_exc())
+
     # Display results
     if st.session_state.search_results:
-        st.header("3. View Contacts")
+        st.header("4. View Contacts")
 
         # Tabs for different personas
         persona_tabs = st.tabs([p for p in st.session_state.search_results.keys()])
@@ -541,4 +628,4 @@ with tab2:
 
 # Footer
 st.markdown("---")
-st.markdown("From the Fall 25 Newbies Luis, Lauren, Praneel")
+st.markdown("From the Fall 25 Newbies Luis, Lauren")
