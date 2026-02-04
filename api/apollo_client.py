@@ -1,8 +1,14 @@
 """Apollo.io API client wrapper"""
+import time
 import requests
 from typing import List, Optional, Dict, Any
 from models.contact import Contact
-from config.settings import APOLLO_API_KEY, APOLLO_RATE_LIMIT
+from config.settings import (
+    APOLLO_API_KEY,
+    APOLLO_RATE_LIMIT_PER_MIN,
+    APOLLO_RATE_LIMIT_PER_HOUR,
+    APOLLO_RATE_WINDOW_SECONDS,
+)
 from utils.rate_limiter import RateLimiter
 
 
@@ -24,9 +30,18 @@ class ApolloClient:
         if not self.api_key:
             raise ValueError("Apollo API key is required")
 
-        # Initialize rate limiter (default: 50 requests per minute)
-        rate_limit = APOLLO_RATE_LIMIT or 50
-        self.rate_limiter = RateLimiter(max_requests=rate_limit, time_window=60)
+        # Initialize rate limiters (defaults: 50/min and 200/hour)
+        per_min_limit = APOLLO_RATE_LIMIT_PER_MIN or 50
+        per_hour_limit = APOLLO_RATE_LIMIT_PER_HOUR or 200
+        per_hour_window = APOLLO_RATE_WINDOW_SECONDS or 3600
+        self.rate_limiter_min = RateLimiter(max_requests=per_min_limit, time_window=60)
+        self.rate_limiter_hour = RateLimiter(max_requests=per_hour_limit, time_window=per_hour_window)
+
+    def _acquire_rate_limit(self) -> None:
+        if not self.rate_limiter_min.acquire(block=True, timeout=None):
+            raise RuntimeError("Rate limit exceeded for Apollo API (per minute)")
+        if not self.rate_limiter_hour.acquire(block=True, timeout=None):
+            raise RuntimeError("Rate limit exceeded for Apollo API (per hour)")
 
         self.session = requests.Session()
         self.session.headers.update({
@@ -93,18 +108,39 @@ class ApolloClient:
             payload["contact_email_status"] = ["verified"]
 
         # Rate limit
-        if not self.rate_limiter.acquire(block=True, timeout=30):
-            raise RuntimeError("Rate limit exceeded for Apollo API")
+        self._acquire_rate_limit()
 
         try:
             print(f"DEBUG: Sending request to Apollo - Page: {page}, Per page: {per_page}")
             print(f"DEBUG: Payload: {payload}")
 
-            response = self.session.post(
-                endpoint,
-                json=payload,
-                headers={"X-Api-Key": self.api_key}
-            )
+            max_retries = 2
+            attempt = 0
+            while True:
+                response = self.session.post(
+                    endpoint,
+                    json=payload,
+                    headers={"X-Api-Key": self.api_key}
+                )
+                if response.status_code != 429:
+                    break
+
+                retry_after = response.headers.get("Retry-After")
+                wait_seconds = 300
+                if retry_after:
+                    try:
+                        wait_seconds = int(retry_after)
+                    except ValueError:
+                        wait_seconds = 300
+
+                # Apollo may return overly large values; cap to a sane window.
+                wait_seconds = min(max(wait_seconds, 60), 3600)
+
+                attempt += 1
+                print(f"RATE LIMIT: Apollo returned 429. Waiting {int(wait_seconds / 60)} minutes before retry...")
+                time.sleep(wait_seconds)
+                if attempt > max_retries:
+                    break
             response.raise_for_status()
             result = response.json()
 
@@ -160,8 +196,7 @@ class ApolloClient:
             raise ValueError("At least one search parameter must be provided")
 
         # Rate limit
-        if not self.rate_limiter.acquire(block=True, timeout=30):
-            raise RuntimeError("Rate limit exceeded for Apollo API")
+        self._acquire_rate_limit()
 
         try:
             response = self.session.post(
@@ -372,8 +407,7 @@ class ApolloClient:
             endpoint = f"{self.BASE_URL}/people/match"
 
             # Rate limit
-            if not self.rate_limiter.acquire(block=True, timeout=30):
-                raise RuntimeError("Rate limit exceeded for Apollo API")
+            self._acquire_rate_limit()
 
             payload = {
                 "id": person_id,

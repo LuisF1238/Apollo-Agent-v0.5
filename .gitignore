@@ -15,8 +15,8 @@ __pycache__/
 .Python
 venv/
 env/
-ENV/
+ENV/scrolllockscrolllock
 
 # Exports
-exports/
+#exports/
 

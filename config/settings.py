@@ -30,7 +30,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///apollo_coffee.db")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 # Rate Limiting
-APOLLO_RATE_LIMIT = int(os.getenv("APOLLO_RATE_LIMIT", "50"))  # requests per minute
+# Apollo API limits: 50 requests/minute and 200 requests/hour by default.
+APOLLO_RATE_LIMIT_PER_MIN = int(os.getenv("APOLLO_RATE_LIMIT_PER_MIN", "50"))
+APOLLO_RATE_LIMIT_PER_HOUR = int(os.getenv("APOLLO_RATE_LIMIT_PER_HOUR", "200"))
+APOLLO_RATE_WINDOW_SECONDS = int(os.getenv("APOLLO_RATE_WINDOW_SECONDS", "3600"))
 EMAIL_RATE_LIMIT = int(os.getenv("EMAIL_RATE_LIMIT", "20"))   # emails per hour
 
 # Environment
@@ -51,7 +54,9 @@ __all__ = [
     "GMAIL_APP_PASSWORD",
     "DATABASE_URL",
     "REDIS_URL",
-    "APOLLO_RATE_LIMIT",
+    "APOLLO_RATE_LIMIT_PER_MIN",
+    "APOLLO_RATE_LIMIT_PER_HOUR",
+    "APOLLO_RATE_WINDOW_SECONDS",
     "EMAIL_RATE_LIMIT",
     "ENVIRONMENT",
     "OPENAI_MODEL",

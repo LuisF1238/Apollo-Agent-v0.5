@@ -100,7 +100,7 @@ class YCBatchProcessor:
                 print(f"⏸️  Rate limit reached ({self.max_requests_per_hour} requests/hour)")
                 print(f"⏳ Waiting {int(wait_time.total_seconds() / 60)} minutes until next batch...")
                 time.sleep(wait_time.total_seconds())
-
+scrolllockscrolllock
                 # Reset counter after waiting
                 self.progress['requests_this_hour'] = 0
                 self.progress['hour_start_time'] = datetime.now().isoformat()
