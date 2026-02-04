@@ -48,7 +48,8 @@ class SourcingWorkflow:
             person_seniorities=filters.get("person_seniorities"),
             organization_names=organization_names,
             max_results=max_contacts,
-            verified_only=verified_only
+            verified_only=verified_only,
+            reveal_personal_emails=reveal_emails
         )
 
         # assign persona to each contact
@@ -203,13 +204,31 @@ class SourcingWorkflow:
             List of enriched contacts
         """
         enriched = []
+        credits_exhausted = False
+
         for i, contact in enumerate(contacts, 1):
+            # Skip enrichment if we've already exhausted credits
+            if credits_exhausted:
+                enriched.append(contact)
+                continue
+
             try:
                 print(f"Enriching {i}/{len(contacts)}: {contact.name}...")
                 enriched_contact = self.enrich_contact_email(contact)
+
+                # If email still not available after enrichment, it likely means no credits
+                if not enriched_contact.email and not contact.email:
+                    credits_exhausted = True
+                    print(f"⚠️  Skipping remaining email enrichments (insufficient credits)")
+
                 enriched.append(enriched_contact)
             except Exception as e:
-                print(f"⚠️  Failed to enrich {contact.name}: {str(e)}")
+                error_msg = str(e).lower()
+                if "insufficient credits" in error_msg or "422" in error_msg:
+                    credits_exhausted = True
+                    print(f"⚠️  Skipping remaining email enrichments (insufficient credits)")
+                else:
+                    print(f"⚠️  Failed to enrich {contact.name}: {str(e)}")
                 enriched.append(contact)  # Keep original
 
         return enriched

@@ -183,7 +183,8 @@ class ApolloClient:
         organization_names: Optional[List[str]] = None,
         person_seniorities: Optional[List[str]] = None,
         max_results: int = 25,
-        verified_only: bool = False
+        verified_only: bool = False,
+        reveal_personal_emails: bool = True
     ) -> List[Contact]:
         """
         Search for contacts and convert to Contact models with pagination support
@@ -194,6 +195,7 @@ class ApolloClient:
             person_seniorities: List of seniority levels
             max_results: Maximum number of results to return (up to 500)
             verified_only: If True, only return verified Apollo profiles
+            reveal_personal_emails: If True, reveal personal emails (uses credits, default: True)
 
         Returns:
             List of Contact objects
@@ -211,7 +213,8 @@ class ApolloClient:
                     organization_name=org_name,
                     person_seniorities=person_seniorities,
                     max_results=results_per_company,
-                    verified_only=verified_only
+                    verified_only=verified_only,
+                    reveal_personal_emails=reveal_personal_emails
                 )
                 print(f"Found {len(company_contacts)} contacts for {org_name}")
                 all_contacts.extend(company_contacts)
@@ -225,7 +228,8 @@ class ApolloClient:
                 organization_name=organization_names[0] if organization_names else None,
                 person_seniorities=person_seniorities,
                 max_results=max_results,
-                verified_only=verified_only
+                verified_only=verified_only,
+                reveal_personal_emails=reveal_personal_emails
             )
 
     def _search_single_company(
@@ -234,7 +238,8 @@ class ApolloClient:
         organization_name: Optional[str] = None,
         person_seniorities: Optional[List[str]] = None,
         max_results: int = 25,
-        verified_only: bool = False
+        verified_only: bool = False,
+        reveal_personal_emails: bool = True
     ) -> List[Contact]:
         """
         Search for contacts from a single company with pagination support
@@ -245,6 +250,7 @@ class ApolloClient:
             person_seniorities: List of seniority levels
             max_results: Maximum number of results to return
             verified_only: If True, only return verified Apollo profiles
+            reveal_personal_emails: If True, reveal personal emails (uses credits, default: True)
 
         Returns:
             List of Contact objects
@@ -269,7 +275,8 @@ class ApolloClient:
                 person_seniorities=person_seniorities,
                 page=page,
                 per_page=current_per_page,
-                verified_only=verified_only
+                verified_only=verified_only,
+                reveal_personal_emails=reveal_personal_emails
             )
 
             people = results.get("people", [])
@@ -355,56 +362,73 @@ class ApolloClient:
                 return contact
 
         try:
-            # Use the people bulk match endpoint with reveal_personal_emails
-            endpoint = f"{self.BASE_URL}/people/bulk_match"
+            # Use /people/match endpoint with reveal_personal_emails to get email
+            endpoint = f"{self.BASE_URL}/people/match"
 
             # Rate limit
             if not self.rate_limiter.acquire(block=True, timeout=30):
                 raise RuntimeError("Rate limit exceeded for Apollo API")
 
-            # POST request to bulk match with reveal
             payload = {
-                "reveal_personal_emails": True,
-                "details": [{"id": person_id}]
+                "id": person_id,
+                "reveal_personal_emails": True
             }
+
+            print(f"DEBUG: Sending email reveal request for person_id: {person_id}")
+            print(f"DEBUG: Payload: {payload}")
 
             response = self.session.post(
                 endpoint,
                 json=payload,
                 headers={"X-Api-Key": self.api_key}
             )
+
+            print(f"DEBUG: Response status code: {response.status_code}")
+
+            # If this endpoint doesn't work, just return the contact as-is
+            if response.status_code == 422 or response.status_code == 404:
+                print(f"⚠️  Email reveal failed (likely insufficient credits or email not available)")
+                return contact
+
             response.raise_for_status()
             result = response.json()
 
-            # Extract the first match
-            matches = result.get("matches", [])
-            if not matches:
-                print(f"DEBUG: No matches returned for person_id: {person_id}")
-                return contact
+            print(f"DEBUG: Response keys: {result.keys()}")
+            print(f"DEBUG: Full response: {result}")
 
-            revealed_data = matches[0]
+            # Extract person data from response
+            revealed_data = result.get("person", {})
 
-            print(f"DEBUG: Revealed data keys: {revealed_data.keys()}")
+            print(f"DEBUG: Revealed data keys: {revealed_data.keys() if isinstance(revealed_data, dict) else 'N/A'}")
+            print(f"DEBUG: Email field value: {revealed_data.get('email') if isinstance(revealed_data, dict) else 'N/A'}")
 
-            # Update first name and last name if available
-            if revealed_data.get("first_name"):
-                contact.first_name = revealed_data["first_name"]
-            if revealed_data.get("last_name"):
-                contact.last_name = revealed_data["last_name"]
+            # Update contact with revealed data if it's a dict
+            if isinstance(revealed_data, dict):
+                # Update first name and last name if available
+                if revealed_data.get("first_name"):
+                    contact.first_name = revealed_data["first_name"]
+                if revealed_data.get("last_name"):
+                    contact.last_name = revealed_data["last_name"]
 
-            # Update full name
-            if contact.first_name and contact.last_name:
-                contact.name = f"{contact.first_name} {contact.last_name}"
-            elif contact.first_name:
-                contact.name = contact.first_name
+                # Update full name
+                if contact.first_name and contact.last_name:
+                    contact.name = f"{contact.first_name} {contact.last_name}"
+                elif contact.first_name:
+                    contact.name = contact.first_name
 
-            # Extract email
-            email_status = revealed_data.get("email_status")
-            if revealed_data.get("email"):
-                contact.email = revealed_data["email"]
-                print(f"DEBUG: Email found: {contact.email}")
+                # Extract email - check multiple possible fields
+                email_status = revealed_data.get("email_status")
+                email = revealed_data.get("email") or revealed_data.get("personal_email")
+
+                if email:
+                    contact.email = email
+                    print(f"DEBUG: Email found: {contact.email}")
+                else:
+                    print(f"DEBUG: No email available - Status: {email_status}")
+                    print(f"DEBUG: Checking email field: {revealed_data.get('email')}")
+                    print(f"DEBUG: Checking personal_email field: {revealed_data.get('personal_email')}")
             else:
-                print(f"DEBUG: No email available - Status: {email_status}")
+                print(f"DEBUG: revealed_data is not a dict, cannot extract email")
 
             # Also update any other missing fields
             if not contact.phone and revealed_data.get("phone_numbers"):
